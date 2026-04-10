@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pet Feeder C3</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; text-align: center; color: #333; }
+        .card { background: white; max-width: 400px; margin: 20px auto; padding: 20px; border-radius: 15px; shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-feed { background: #ff4757; color: white; border: none; padding: 15px 30px; font-size: 1.2rem; border-radius: 50px; cursor: pointer; }
+        select { padding: 10px; margin: 10px; border-radius: 5px; border: 1px solid #ccc; }
+        .status { font-weight: bold; color: #2ed573; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🐾 Pet Feeder</h1>
+        <div class="status-box">
+            <p>Nível de Ração: <span id="nivel">--</span>%</p>
+            <p>Última Alimentação: <span id="ultima">--:--</span></p>
+        </div>
+        <button class="btn-feed" onclick="enviar('ALIMENTAR_AGORA')">ALIMENTAR AGORA</button>
+    </div>
+
+    <div class="card">
+        <h3>Programar Horários</h3>
+        <div>
+            Manhã: 
+            <select id="h1" onchange="atualizarHorario(1)">
+                <option value="07:00">07:00</option>
+                <option value="08:00" selected>08:00</option>
+                <option value="09:00">09:00</option>
+            </select>
+        </div>
+        <div>
+            Tarde/Noite: 
+            <select id="h2" onchange="atualizarHorario(2)">
+                <option value="18:00" selected>18:00</option>
+                <option value="19:00">19:00</option>
+                <option value="20:00">20:00</option>
+            </select>
+        </div>
+    </div>
+
+    <script>
+        let gateway = `ws://${window.location.hostname}:81/`;
+        let websocket;
+
+        function initWebSocket() {
+            websocket = new WebSocket(gateway);
+            websocket.onmessage = (event) => {
+                let data = JSON.parse(event.data);
+                document.getElementById('nivel').innerText = data.nivel;
+                document.getElementById('ultima').innerText = data.ultima;
+            };
+        }
+
+        function enviar(msg) { websocket.send(msg); }
+
+        function atualizarHorario(num) {
+            let val = document.getElementById('h' + num).value;
+            enviar("SET_H" + num + ":" + val);
+        }
+
+        window.onload = initWebSocket;
+    </script>
+</body>
+</html>
