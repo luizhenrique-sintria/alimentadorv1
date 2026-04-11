@@ -1,76 +1,31 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Balança Digital ESP32</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #121212; color: white; text-align: center; margin-top: 50px; }
-        .box { background: #1e1e1e; padding: 40px; margin: 20px auto; border-radius: 20px; border: 2px solid #007bff; width: 80%; max-width: 400px; }
-        #peso { font-size: 4rem; font-weight: bold; color: #00ff00; }
-        .unit { font-size: 1.5rem; color: #aaa; }
-        button { padding: 15px 30px; font-size: 1.2rem; font-weight: bold; cursor: pointer; border: none; border-radius: 10px; margin: 10px; transition: 0.3s; }
-        .btn-connect { background: #007bff; color: white; }
-        .btn-tare { background: #dc3545; color: white; width: 100%; }
-        button:active { transform: scale(0.95); }
-    </style>
-</head>
-<body>
-    <h1>Balança Bluetooth</h1>
-    <button class="btn-connect" onclick="conectar()">CONECTAR BALANÇA</button>
+async function conectar() {
+    try {
+        console.log("Buscando dispositivo...");
+        const device = await navigator.bluetooth.requestDevice({
+            // Filtra pelo UUID do serviço em vez de filtrar por nome
+            filters: [{ services: [SERVICE_UUID] }] 
+        });
 
-    <div class="box">
-        <div id="peso">0.00</div>
-        <div class="unit">gramas</div>
-        <hr style="border: 0.5px solid #444; margin: 20px 0;">
-        <button class="btn-tare" onclick="enviarTara()">ZERAR (TARA)</button>
-    </div>
+        console.log("Conectando ao servidor GATT...");
+        const server = await device.gatt.connect();
+        
+        console.log("Obtendo serviço...");
+        const service = await server.getPrimaryService(SERVICE_UUID);
 
-    <script>
-        const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-        const TX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
-        const RX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+        // Configurar Recebimento (Peso)
+        const txChar = await service.getCharacteristic(TX_UUID);
+        await txChar.startNotifications();
+        txChar.addEventListener('characteristicvaluechanged', e => {
+            const valor = new TextDecoder().decode(e.target.value);
+            document.getElementById('peso').innerText = valor;
+        });
 
-        let characteristicRX;
+        // Configurar Envio (Tara)
+        characteristicRX = await service.getCharacteristic(RX_UUID);
 
-        async function conectar() {
-            try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'ESP32' }],
-                    optionalServices: [SERVICE_UUID]
-                });
-
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(SERVICE_UUID);
-
-                // Configurar Recebimento (Peso)
-                const txChar = await service.getCharacteristic(TX_UUID);
-                await txChar.startNotifications();
-                txChar.addEventListener('characteristicvaluechanged', e => {
-                    const valor = new TextDecoder().decode(e.target.value);
-                    document.getElementById('peso').innerText = valor;
-                });
-
-                // Configurar Envio (Tara)
-                characteristicRX = await service.getCharacteristic(RX_UUID);
-
-                alert("Balança Conectada!");
-            } catch (err) {
-                console.error(err);
-                alert("Erro: " + err.message);
-            }
-        }
-
-        async function enviarTara() {
-            if (!characteristicRX) return alert("Conecte primeiro!");
-            try {
-                const data = new TextEncoder().encode("T");
-                await characteristicRX.writeValue(data);
-                console.log("Comando de tara enviado");
-            } catch (err) {
-                alert("Erro ao tarar: " + err);
-            }
-        }
-    </script>
-</body>
-</html>
+        alert("Balança Conectada!");
+    } catch (err) {
+        console.error("Erro detalhado:", err);
+        alert("Erro: " + err.message);
+    }
+}
