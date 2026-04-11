@@ -3,118 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pet Feeder C3 - Painel de Controle</title>
+    <title>Balança Digital ESP32</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 20px; }
-        .container { max-width: 450px; margin: auto; }
-        .card { background: #1e1e1e; padding: 25px; margin: 15px 0; border-radius: 20px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        
-        h1 { color: #00d1b2; margin-bottom: 5px; }
-        h3 { color: #bbb; margin-top: 0; }
-        
-        .status-val { font-size: 1.4rem; font-weight: bold; color: #00ff00; }
-        .label { color: #888; font-size: 0.9rem; text-transform: uppercase; }
-
-        .btn-feed { background: #ff4757; color: white; border: none; padding: 20px; width: 100%; font-size: 1.2rem; font-weight: bold; border-radius: 15px; cursor: pointer; transition: 0.3s; margin-top: 10px; }
-        .btn-feed:active { transform: scale(0.95); background: #ff6b81; }
-
-        select { background: #333; color: white; border: 1px solid #444; padding: 10px; border-radius: 8px; font-size: 1rem; width: 100px; margin: 5px; }
-        
-        .btn-save { background: #2196F3; color: white; border: none; padding: 12px 25px; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 15px; width: 100%; transition: 0.3s; }
-        .btn-save:hover { background: #1e88e5; box-shadow: 0 0 10px rgba(33, 150, 243, 0.4); }
-
-        .divider { height: 1px; background: #333; margin: 20px 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #121212; color: white; text-align: center; margin-top: 50px; }
+        .box { background: #1e1e1e; padding: 40px; margin: 20px auto; border-radius: 20px; border: 2px solid #007bff; width: 80%; max-width: 400px; }
+        #peso { font-size: 4rem; font-weight: bold; color: #00ff00; }
+        .unit { font-size: 1.5rem; color: #aaa; }
+        button { padding: 15px 30px; font-size: 1.2rem; font-weight: bold; cursor: pointer; border: none; border-radius: 10px; margin: 10px; transition: 0.3s; }
+        .btn-connect { background: #007bff; color: white; }
+        .btn-tare { background: #dc3545; color: white; width: 100%; }
+        button:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
+    <h1>Balança Bluetooth</h1>
+    <button class="btn-connect" onclick="conectar()">CONECTAR BALANÇA</button>
 
-    <div class="container">
-        <h1>🐾 Pet Feeder</h1>
-        <p style="color: #666; margin-bottom: 20px;">ESP32-C3 SuperMini</p>
-
-        <div class="card">
-            <div style="display: flex; justify-content: space-around; margin-bottom: 20px;">
-                <div>
-                    <div class="label">Nível de Ração</div>
-                    <div class="status-val"><span id="nivel">--</span>%</div>
-                </div>
-                <div>
-                    <div class="label">Última Refeição</div>
-                    <div class="status-val" id="ultima">--:--</div>
-                </div>
-            </div>
-            
-            <button class="btn-feed" onclick="enviar('ALIMENTAR_AGORA')">🍴 ALIMENTAR AGORA</button>
-        </div>
-
-        <div class="card">
-            <h3>Horários Agendados</h3>
-            
-            <div style="margin: 10px 0;">
-                <span class="label">Manhã:</span>
-                <select id="h1">
-                    <option value="06:00">06:00</option>
-                    <option value="07:00">07:00</option>
-                    <option value="08:00" selected>08:00</option>
-                    <option value="09:00">09:00</option>
-                    <option value="10:00">10:00</option>
-                </select>
-            </div>
-
-            <div style="margin: 10px 0;">
-                <span class="label">Tarde/Noite:</span>
-                <select id="h2">
-                    <option value="17:00">17:00</option>
-                    <option value="18:00" selected>18:00</option>
-                    <option value="19:00">19:00</option>
-                    <option value="20:00">20:00</option>
-                    <option value="21:00">21:00</option>
-                </select>
-            </div>
-
-            <button class="btn-save" onclick="salvarProgramacao()">💾 CONFIRMAR HORÁRIOS</button>
-        </div>
+    <div class="box">
+        <div id="peso">0.00</div>
+        <div class="unit">gramas</div>
+        <hr style="border: 0.5px solid #444; margin: 20px 0;">
+        <button class="btn-tare" onclick="enviarTara()">ZERAR (TARA)</button>
     </div>
 
     <script>
-        let gateway = ws:10.219.90.14;
-        let websocket;
+        const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+        const TX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+        const RX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
-        function initWebSocket() {
-            console.log('Tentando conectar ao WebSocket...');
-            websocket = new WebSocket(gateway);
-            
-            websocket.onopen = () => console.log('Conectado!');
-            websocket.onclose = () => setTimeout(initWebSocket, 2000); // Tenta reconectar se cair
-            
-            websocket.onmessage = (event) => {
-                let data = JSON.parse(event.data);
-                if(data.type === "status") {
-                    document.getElementById('nivel').innerText = data.nivel;
-                    document.getElementById('ultima').innerText = data.ultima;
-                }
-            };
-        }
+        let characteristicRX;
 
-        function enviar(msg) {
-            if (websocket.readyState === WebSocket.OPEN) {
-                websocket.send(msg);
-            } else {
-                alert("Erro: Sem conexão com o alimentador.");
+        async function conectar() {
+            try {
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'ESP32' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+
+                // Configurar Recebimento (Peso)
+                const txChar = await service.getCharacteristic(TX_UUID);
+                await txChar.startNotifications();
+                txChar.addEventListener('characteristicvaluechanged', e => {
+                    const valor = new TextDecoder().decode(e.target.value);
+                    document.getElementById('peso').innerText = valor;
+                });
+
+                // Configurar Envio (Tara)
+                characteristicRX = await service.getCharacteristic(RX_UUID);
+
+                alert("Balança Conectada!");
+            } catch (err) {
+                console.error(err);
+                alert("Erro: " + err.message);
             }
         }
 
-        function salvarProgramacao() {
-            const h1 = document.getElementById('h1').value;
-            const h2 = document.getElementById('h2').value;
-            
-            // Envia os dois de uma vez para o ESP processar
-            enviar("SAVE_SCHEDULE:" + h1 + "|" + h2);
-            
-            alert("Programação atualizada!\nManhã: " + h1 + "\nNoite: " + h2);
+        async function enviarTara() {
+            if (!characteristicRX) return alert("Conecte primeiro!");
+            try {
+                const data = new TextEncoder().encode("T");
+                await characteristicRX.writeValue(data);
+                console.log("Comando de tara enviado");
+            } catch (err) {
+                alert("Erro ao tarar: " + err);
+            }
         }
-
-        window.onload = initWebSocket;
     </script>
 </body>
 </html>
